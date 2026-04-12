@@ -42,6 +42,7 @@
         <module>shopflow-commons</module>
         <module>auth-service</module>
         <module>api-gateway</module>
+        <module>order-service</module>
     </modules>
 
 </project>
