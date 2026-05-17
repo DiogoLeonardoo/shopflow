@@ -1,18 +1,20 @@
 package com.shopflow.order.service;
 
 import com.shopflow.commons.events.OrderCreatedEvent;
+import com.shopflow.order.client.CatalogClient;
 import com.shopflow.order.domain.Order;
 import com.shopflow.order.domain.OrderItem;
 import com.shopflow.order.dto.OrderRequest;
 import com.shopflow.order.dto.OrderResponse;
+import com.shopflow.order.dto.ProductResponse;
 import com.shopflow.order.kafka.OrderProducer;
 import com.shopflow.order.repository.OrderRepository;
 import com.shopflow.order.repository.OrderSpecification;
-import org.springframework.transaction.annotation.Transactional;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
@@ -26,20 +28,38 @@ public class OrderService {
 
     private final OrderRepository orderRepository;
     private final OrderProducer orderProducer;
+    private final CatalogClient catalogClient;
 
     @Transactional
     public OrderResponse create(OrderRequest request, String userId) {
 
         List<OrderItem> items = request.getItems().stream()
-                .map(itemRequest -> OrderItem.builder()
-                        .productId(itemRequest.getProductId())
-                        .quantity(itemRequest.getQuantity())
-                        .price(itemRequest.getPrice())
-                        .build())
+                .map(itemRequest -> {
+
+                    ProductResponse product = catalogClient
+                            .getProduct(itemRequest.getProductId());
+
+                    if (!product.isActive()) {
+                        throw new RuntimeException(
+                                "Produto " + itemRequest.getProductId() + " está inativo");
+                    }
+
+                    if (product.getStockQuantity() < itemRequest.getQuantity()) {
+                        throw new RuntimeException(
+                                "Estoque insuficiente para o produto " + product.getName());
+                    }
+
+                    return OrderItem.builder()
+                            .productId(itemRequest.getProductId())
+                            .quantity(itemRequest.getQuantity())
+                            .price(product.getPrice())
+                            .build();
+                })
                 .collect(Collectors.toList());
 
         BigDecimal totalAmount = items.stream()
-                .map(item -> item.getPrice().multiply(new BigDecimal(item.getQuantity())))
+                .map(item -> item.getPrice()
+                        .multiply(new BigDecimal(item.getQuantity())))
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
 
         Order order = Order.builder()
@@ -54,29 +74,9 @@ public class OrderService {
 
         publishOrderCreatedEvent(saved);
 
-        log.info("Pedido criado com sucesso: {}", saved.getId());
+        log.info("Pedido criado: {}", saved.getId());
 
         return OrderResponse.from(saved);
-    }
-
-    private void publishOrderCreatedEvent(Order order) {
-        List<OrderCreatedEvent.OrderItemEvent> itemEvents = order.getItems().stream()
-                .map(item -> OrderCreatedEvent.OrderItemEvent.builder()
-                        .productId(item.getProductId())
-                        .quantity(item.getQuantity())
-                        .price(item.getPrice())
-                        .build())
-                .collect(Collectors.toList());
-
-        OrderCreatedEvent event = OrderCreatedEvent.builder()
-                .orderId(order.getId())
-                .userId(order.getUserId())
-                .items(itemEvents)
-                .totalAmount(order.getTotalAmount())
-                .createdAt(order.getCreatedAt())
-                .build();
-
-        orderProducer.publishOrderCreated(event);
     }
 
     public List<OrderResponse> findOrders(
@@ -109,5 +109,25 @@ public class OrderService {
                 .stream()
                 .map(OrderResponse::from)
                 .collect(Collectors.toList());
+    }
+
+    private void publishOrderCreatedEvent(Order order) {
+        List<OrderCreatedEvent.OrderItemEvent> itemEvents = order.getItems().stream()
+                .map(item -> OrderCreatedEvent.OrderItemEvent.builder()
+                        .productId(item.getProductId())
+                        .quantity(item.getQuantity())
+                        .price(item.getPrice())
+                        .build())
+                .collect(Collectors.toList());
+
+        OrderCreatedEvent event = OrderCreatedEvent.builder()
+                .orderId(order.getId())
+                .userId(order.getUserId())
+                .items(itemEvents)
+                .totalAmount(order.getTotalAmount())
+                .createdAt(order.getCreatedAt())
+                .build();
+
+        orderProducer.publishOrderCreated(event);
     }
 }

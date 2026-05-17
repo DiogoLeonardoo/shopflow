@@ -43,5 +43,32 @@ services:
     environment:
       KAFKA_BROKERCONNECT: shopflow-kafka:29092
 
+  mongodb:
+    image: mongo:7
+    container_name: shopflow-mongodb
+    environment:
+      MONGO_INITDB_DATABASE: shopflow_catalog
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongodb_data:/data/db
+
+  redis:
+    image: redis:7
+    container_name: shopflow-redis
+    ports:
+      - "6379:6379"
+
+  activemq:
+    image: apache/activemq-classic:5.18.3
+    container_name: shopflow-activemq
+    ports:
+      - "61616:61616"
+      - "8161:8161"
+    environment:
+      ACTIVEMQ_ADMIN_LOGIN: admin
+      ACTIVEMQ_ADMIN_PASSWORD: admin
+
 volumes:
   postgres_data:
+  mongodb_data:

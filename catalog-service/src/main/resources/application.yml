@@ -1,0 +1,19 @@
+spring:
+  application:
+    name: catalog-service
+
+  data:
+    mongodb:
+      uri: mongodb://localhost:27017/shopflow_catalog
+    redis:
+      host: localhost
+      port: 6379
+
+server:
+  port: 8082
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health, info

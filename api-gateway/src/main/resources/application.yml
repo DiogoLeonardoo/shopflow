@@ -20,6 +20,16 @@ spring:
           predicates:
             - Path=/orders/**
 
+        - id: payment-service
+          uri: http://localhost:8084
+          predicates:
+            - Path=/payments/**
+
+        - id: stock-service
+          uri: http://localhost:8085
+          predicates:
+            - Path=/stock/**
+
 server:
   port: 8080
 

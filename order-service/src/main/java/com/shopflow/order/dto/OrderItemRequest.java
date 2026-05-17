@@ -17,7 +17,4 @@ public class OrderItemRequest {
     @Positive(message = "Quantidade deve ser maior que zero")
     private Integer quantity;
 
-    @NotNull(message = "Preço é obrigatório")
-    @Positive(message = "Preço deve ser maior que zero")
-    private BigDecimal price;
 }
